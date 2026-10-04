@@ -1,0 +1,19 @@
+{
+ "_설명": "UAV-SEAD (Kabaoglu & Sariel 2026, CC BY 4.0). Normal + Mechanical .ulg. 10 Hz·L 64. 날짜 묶음 단위 나누기.",
+ "dataset": "uav_sead",
+ "principles_version": "0.4",
+ "raw": "/path/to/ulog_annotation_tool/data/ulg_files",
+ "mapping": "/path/to/ulog_annotation_tool/data/mapping.json",
+ "hz": 10.0,
+ "L": 64,
+ "min_extra_steps": 10,
+ "test_class": "Mechanical",
+ "label_classes": [
+  "Mechanical"
+ ],
+ "max_vel": 20.0,
+ "valid_frac": 0.25,
+ "seed": 0,
+ "workers": 12,
+ "out_npz": "data/uav_sead/uav_sead_L64.npz"
+}

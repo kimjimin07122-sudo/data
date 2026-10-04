@@ -1,0 +1,23 @@
+{
+ "_설명": "연구실 데이터셋 (Ahn et al., Measurement 2026). 서약서 대상 — 데이터·라벨·출력물을 저장소나 외부로 옮기지 않는다. 5 Hz·L 32.",
+ "dataset": "ardu",
+ "principles_version": "0.4",
+ "raw": "/path/to/Dataset",
+ "labels": "/path/to/labels.json",
+ "hz": 5.0,
+ "L": 32,
+ "min_extra_steps": 10,
+ "ground": {
+  "pwm_max": 1150,
+  "idle_throttle_max": 0.05,
+  "idle_pwm_max": 1300
+ },
+ "exclude_classes": {
+  "EMI": "프로펠러를 뗀 대리 기록 — 비행 없음 (논문 Table 7)",
+  "Heating": "비행 없이 실험실에서 찍은 대리 기록 (논문 Table 7)"
+ },
+ "valid_frac": 0.25,
+ "out_npz": "data/ardu/ardu_L32.npz",
+ "liftoff_alt_m": 0.8,
+ "quat_continuous": false
+}

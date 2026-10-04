@@ -1,0 +1,84 @@
+{
+ "_설명": "ALFA (CMU AirLab, CC0) 공식 processed 배포본. 4 Hz·L 24. 배정은 Park et al.(IROS 2022) 분할을 그대로 쓴다.",
+ "dataset": "alfa",
+ "principles_version": "0.4",
+ "raw": "/path/to/ALFA/processed",
+ "hz": 4.0,
+ "L": 24,
+ "drop_head_s": 8.0,
+ "min_extra_steps": 10,
+ "sets": {
+  "normal": {
+   "sequences": [
+    "2018-07-18-15-53-31_1_engine_failure",
+    "2018-07-18-15-53-31_2_engine_failure",
+    "2018-07-18-16-37-39_2_engine_failure_with_emr_traj",
+    "2018-07-30-16-39-00_2_engine_failure",
+    "2018-07-30-16-39-00_3_no_failure",
+    "2018-07-30-17-10-45_engine_failure_with_emr_traj",
+    "2018-09-11-11-56-30_engine_failure",
+    "2018-09-11-14-16-55_no_failure",
+    "2018-09-11-14-22-07_1_engine_failure",
+    "2018-09-11-14-41-38_no_failure",
+    "2018-09-11-14-52-54_left_aileron__right_aileron__failure",
+    "2018-09-11-15-05-11_2_no_failure",
+    "2018-09-11-15-06-34_3_rudder_left_failure",
+    "2018-09-11-17-27-13_1_rudder_zero__left_aileron_failure",
+    "2018-09-11-17-55-30_2_left_aileron_failure",
+    "2018-10-05-14-34-20_2_right_aileron_failure_with_emr_traj",
+    "2018-10-05-14-37-22_1_no_failure",
+    "2018-10-05-14-37-22_2_right_aileron_failure",
+    "2018-10-05-15-52-12_1_no_failure",
+    "2018-10-05-15-52-12_2_no_failure",
+    "2018-10-05-15-55-10_engine_failure_with_emr_traj",
+    "2018-10-05-16-04-46_engine_failure_with_emr_traj",
+    "2018-10-18-11-04-08_2_engine_failure_with_emr_traj",
+    "2018-10-18-11-06-06_engine_failure_with_emr_traj",
+    "2018-10-18-11-08-24_no_failure"
+   ],
+   "cut_at_onset": true
+  },
+  "valid": {
+   "sequences": [
+    "2018-07-18-16-37-39_1_no_failure",
+    "2018-09-11-14-22-07_2_engine_failure",
+    "2018-09-11-17-55-30_1_right_aileron_failure",
+    "2018-10-05-14-34-20_1_no_failure",
+    "2018-10-05-14-37-22_3_left_aileron_failure",
+    "2018-10-05-15-52-12_3_engine_failure_with_emr_traj",
+    "2018-10-18-11-04-00_engine_failure_with_emr_traj",
+    "2018-10-18-11-04-08_1_engine_failure_with_emr_traj"
+   ],
+   "cut_at_onset": true
+  },
+  "engine": {
+   "sequences": [
+    "2018-07-18-16-22-01_engine_failure_with_emr_traj",
+    "2018-07-30-16-29-45_engine_failure_with_emr_traj",
+    "2018-07-30-16-39-00_1_engine_failure",
+    "2018-07-30-17-20-01_engine_failure_with_emr_traj",
+    "2018-07-30-17-36-35_engine_failure_with_emr_traj",
+    "2018-07-30-17-46-31_engine_failure_with_emr_traj",
+    "2018-10-18-11-03-57_engine_failure_with_emr_traj",
+    "2018-10-18-11-04-35_engine_failure_with_emr_traj"
+   ]
+  },
+  "elevator": {
+   "sequences": [
+    "2018-09-11-14-41-51_elevator_failure",
+    "2018-09-11-15-05-11_1_elevator_failure"
+   ]
+  },
+  "rudder": {
+   "sequences": [
+    "2018-09-11-15-06-34_1_rudder_right_failure",
+    "2018-09-11-15-06-34_2_rudder_right_failure",
+    "2018-09-11-17-27-13_2_both_ailerons_failure"
+   ]
+  }
+ },
+ "exclude": {
+  "2018-09-11-17-27-13_2_both_ailerons_failure": "원본 결함 신호 aileron=3(양쪽 에일러론), 러더 신호 없음 — Park 가공본의 rudder 라벨 오류 (analysis/alfa A4)"
+ },
+ "out_npz": "data/alfa/alfa_L24.npz"
+}

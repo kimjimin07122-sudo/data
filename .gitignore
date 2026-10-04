@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/
+*.npz
+# 연구실 데이터셋(서약서 대상)의 라벨·출력은 절대 올리지 않는다
+labels.json
