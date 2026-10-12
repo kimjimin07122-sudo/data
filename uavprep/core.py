@@ -22,15 +22,25 @@ def grid_times(t0, t1, dt):
     return t0 + dt * np.arange(1, n + 1)
 
 
-def resample(t, v, grid, dt, method="mean"):
+def resample(t, v, grid, dt, method="mean", with_std=False):
     """원래 주기가 격자보다 빠르면 '직전 dt초 구간 평균'(인과적), 아니면 선형보간 (P6).
     method="last": 모든 채널을 격자 시각 직전(같은 시각 제외)의 마지막 값으로 (Park MATLAB 방식, 비교용).
-    빈 구간은 선형보간으로 메운다. 반환: (값, 원래 주기 Hz)"""
+    빈 구간은 선형보간으로 메운다. 반환: (값, 원래 주기 Hz)
+    with_std=True: 직전 dt초 구간 안 표준편차(흔들림 폭)를 세 번째로 돌려준다. 원래 주기가 격자보다 느리면 0."""
     t = np.asarray(t, float)
     v = np.asarray(v, float)
     d = np.diff(t)
     d = d[d > 0]                       # 같은 시각이 두 번 찍힌 행(ArduPilot 로그에 있음)은 간격에서 뺀다
     native_dt = float(np.median(d)) if len(d) > 1 else dt
+    if with_std:
+        lo = np.searchsorted(t, grid - dt, side="right")
+        hi = np.searchsorted(t, grid, side="right")
+        cs, cs2 = np.concatenate([[0.0], np.cumsum(v)]), np.concatenate([[0.0], np.cumsum(v * v)])
+        cnt = np.maximum(hi - lo, 1)
+        m = (cs[hi] - cs[lo]) / cnt
+        sd = np.sqrt(np.maximum((cs2[hi] - cs2[lo]) / cnt - m * m, 0.0))
+        sd[(hi - lo) < 2] = 0.0
+        return resample(t, v, grid, dt, method)[0], 1.0 / native_dt, sd
     if method == "last":
         i = np.searchsorted(t, grid, side="left") - 1
         return v[np.clip(i, 0, None)], 1.0 / native_dt

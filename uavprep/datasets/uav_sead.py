@@ -38,7 +38,24 @@ SOURCES = {
                    ("vehicle_attitude_setpoint", "thrust", 1), ("vehicle_attitude_setpoint", "thrust_body[2]", -1)],
     **{f"q_com_{c}": [("vehicle_attitude_setpoint", f"q_d[{i}]", 1)] for i, c in enumerate("wxyz")},
 }
-TOPICS = sorted({s[0] for v in SOURCES.values() for s in v} | {"vehicle_land_detected", "vehicle_status"})
+TOPICS = sorted({s[0] for v in SOURCES.values() for s in v} | {"vehicle_land_detected", "vehicle_status", "actuator_outputs"})
+ACT = ["act_mean", "act_spread"]
+STD = ["gyr_std_x", "gyr_std_y", "gyr_std_z", "acc_std_x", "acc_std_y", "acc_std_z"]   # std_outputs 옵션: 격자 한 칸 안 흔들림 폭   # actuator_outputs 옵션: 모터 수와 무관한 요약 (평균, 최대−최소)
+
+
+def _actuator(ulog):
+    """actuator_outputs(0번) 중 모터 채널만 골라 평균·최대−최소. 모터 = 값이 800~2200 안에서만 움직이고 변하는 채널
+    (기체 12001은 8개, 4014는 4개. 보조 출력은 0 또는 1500 고정이라 빠진다)."""
+    try:
+        d = next(x for x in ulog.data_list if x.name == "actuator_outputs" and x.multi_id == 0)
+    except StopIteration:
+        return None
+    o = np.column_stack([d.data[f"output[{i}]"] for i in range(8) if f"output[{i}]" in d.data]).astype(float)
+    m = (o.min(0) >= 800) & (o.max(0) <= 2200) & (o.std(0) > 5)
+    if m.sum() < 3:
+        return None
+    o = o[:, m]
+    return d.data["timestamp"].astype(float) / 1e6, o.mean(1), o.max(1) - o.min(1), int(m.sum())
 
 
 def _series(ulog, ch):
@@ -82,6 +99,26 @@ def read(args):
     if cfg.get("quat_continuous", False):                          # P3: v0.4는 PX4 값 그대로
         x[:, 3:7] = continuous_quat(x[:, 3:7])
         x[:, 14:18] = continuous_quat(x[:, 14:18])
+    n_motor = None
+    if cfg.get("actuator_outputs"):                                # 예측 대상에 모터 출력 요약 2채널 추가
+        a = _actuator(ulog)
+        if a is None:
+            return dict(key=key, error="actuator_outputs 모터 채널 없음")
+        n_motor = a[3]
+        act = np.column_stack([resample(a[0], a[1], g, dt)[0], resample(a[0], a[2], g, dt)[0]])
+        x = np.column_stack([x[:, :len(STATE)], act, x[:, len(STATE):]])
+    if cfg.get("std_outputs"):                                     # 예측 대상에 흔들림 폭 6채널 추가
+        acc = []
+        for i in range(3):
+            try:
+                d = ulog.get_dataset("sensor_combined")
+                acc.append((d.data["timestamp"].astype(float) / 1e6, d.data[f"accelerometer_m_s2[{i}]"].astype(float)))
+            except Exception:
+                return dict(key=key, error="sensor_combined 가속도 없음")
+        sds = [resample(ser[f"ang_vel_meas_{c}"][0], ser[f"ang_vel_meas_{c}"][1], g, dt, with_std=True)[2] for c in "xyz"]
+        sds += [resample(t_, v_, g, dt, with_std=True)[2] for t_, v_ in acc]
+        n_state = len(STATE) + (len(ACT) if cfg.get("actuator_outputs") else 0)
+        x = np.column_stack([x[:, :n_state], np.column_stack(sds), x[:, n_state:]])
     # 지상 (P9)
     landed = armed = None
     try:
@@ -108,7 +145,7 @@ def read(args):
                 info=dict(core_end_s=round(t_last - t_first, 2), onset_s=round(on, 2) if on is not None else None,
                           max_abs_vel=round(float(np.abs(x[:, :3]).max()), 2),
                           ground_source=("landed" if landed is not None else "") + ("+armed" if armed is not None else ""),
-                          angvel_source=ser["ang_vel_meas_x"][2], thrust_source=ser["thrust_com"][2]))
+                          angvel_source=ser["ang_vel_meas_x"][2], thrust_source=ser["thrust_com"][2], n_motor=n_motor))
 
 
 def load_all(cfg):
@@ -143,7 +180,14 @@ def load_all(cfg):
             excluded.append(dict(key=k, set="normal", reason=f"최대 |속도| {ok[k]['info']['max_abs_vel']} m/s > {cfg['max_vel']} (EKF 발산)"))
             continue
         cand.append((k, ok[k]["group"]))
-    tr, va = split_groups(cand, cfg["valid_frac"], cfg["seed"])
+    if cfg.get("split_from"):          # 비교 실험용: 다른 npz의 학습/검증 배정을 그대로 (빠진 비행만 빠짐)
+        z = np.load(cfg["split_from"], allow_pickle=True)
+        base = {s_: {str(k).split("#")[0] for k in z[f"{s_}_keys"]} for s_ in ("normal", "valid")}
+        ck = {k for k, _ in cand}
+        tr, va = sorted(base["normal"] & ck), sorted(base["valid"] & ck)
+    else:
+        tr, va = split_groups(cand, cfg["valid_frac"], cfg["seed"])
     sets = {"normal": [ok[k] for k in tr], "valid": [ok[k] for k in va],
             "mechanical": [ok[k] for k in test if k in ok]}
-    return sets, excluded, STATE, COMMAND
+    return (sets, excluded, STATE + (ACT if cfg.get("actuator_outputs") else []) + (STD if cfg.get("std_outputs") else []),
+            COMMAND)

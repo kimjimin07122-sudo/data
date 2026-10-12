@@ -18,6 +18,7 @@ import pandas as pd
 
 from ..core import continuous_quat, euler_to_quat, grid_times, resample
 
+STD = ["gyr_std_x", "gyr_std_y", "gyr_std_z", "acc_std_x", "acc_std_y", "acc_std_z"]   # std_outputs: imu-data_raw(10 Hz) 칸 안 흔들림 폭
 STATE = ["vel_meas_x", "vel_meas_y", "vel_meas_z", "q_meas_x", "q_meas_y", "q_meas_z", "q_meas_w",
          "angvel_x", "angvel_y", "angvel_z"]
 COMMAND = ["vel_com_x", "vel_com_y", "vel_com_z", "q_com_x", "q_com_y", "q_com_z", "q_com_w"]
@@ -95,6 +96,10 @@ def read(cfg, seq, cut_at_onset):
         rs(vel, "field.des_x", "vel_com_x"), rs(vel, "field.des_y", "vel_com_y"), rs(vel, "field.des_z", "vel_com_z"),
         _cq(cfg, euler_to_quat(c["roll"], c["pitch"], c["yaw"])),
     ])
+    if cfg.get("std_outputs"):
+        imu = _load(raw, seq, "mavros-imu-data_raw", [f"field.angular_velocity.{c}" for c in "xyz"] + [f"field.linear_acceleration.{c}" for c in "xyz"])
+        sds = [resample(imu[0], imu[1][c].to_numpy(float), g, dt, with_std=True)[2] for c in imu[1].columns]
+        x = np.column_stack([x[:, :len(STATE)], np.column_stack(sds), x[:, len(STATE):]])
     fault = (g >= onset) if onset is not None else np.zeros(len(g), bool)
     return dict(key=seq.replace("carbonZ_", ""), group=seq.replace("carbonZ_", ""), t=g - t_first, x=x,
                 fault=fault, ground=np.zeros(len(g), bool),
@@ -114,4 +119,4 @@ def load_all(cfg):
                 continue
             recs.append(read(cfg, "carbonZ_" + seq, cut_at_onset=spec.get("cut_at_onset", False)))
         sets[name] = recs
-    return sets, excluded, STATE, COMMAND
+    return sets, excluded, STATE + (STD if cfg.get("std_outputs") else []), COMMAND

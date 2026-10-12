@@ -109,6 +109,7 @@ uavprep/
     ├── uav_sead.py    UAV-SEAD (.ulg, pyulog)
     └── ardu.py        연구실 데이터셋 (ArduPilot 메시지별 CSV)
 configs/               데이터셋별 표준 설정 (경로만 바꿔 쓴다)
+models/                대표 모델·탐지 실험 코드와 결과 (models/README.md)
 ```
 
 새 데이터셋을 넣으려면 `datasets/<이름>.py`에 `load_all(cfg)`를 만들어 `({세트: [레코드…]}, 제외 목록, 상태 채널 이름, 지령 채널 이름)`을 돌려주면 된다.

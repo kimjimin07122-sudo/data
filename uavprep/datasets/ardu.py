@@ -25,6 +25,8 @@ import pandas as pd
 from ..core import continuous_quat, euler_to_quat, grid_times, resample
 
 STATE = ["vel_x", "vel_y", "vel_z", "q_x", "q_y", "q_z", "q_w", "ang_vel_x", "ang_vel_y", "ang_vel_z"]
+ACT = ["act_mean", "act_spread"]   # actuator_outputs 옵션: RCOU C1~C4 평균, 최대−최소
+STD = ["gyr_std_x", "gyr_std_y", "gyr_std_z", "acc_std_x", "acc_std_y", "acc_std_z"]   # std_outputs 옵션: IMU 25 Hz의 격자 한 칸 안 흔들림 폭
 COMMAND = ["q_des_x", "q_des_y", "q_des_z", "q_des_w", "throttle_in", "throttle_out"]
 CATEGORIES = {"Normal Flight Data": "Normal", "GPS Error Data": "GPS", "IMU Error Data": "IMU",
               "Motor Error Data": "Motor", "Prop Vibration Data": "Vibration", "EMI Error Data": "EMI",
@@ -83,7 +85,7 @@ def _wrap_deg(a):
 def read(cfg, f, labels):
     part = f["parts"].get("normal" if f["cls"] == "Normal" else "origin") or f["parts"].get("normal")
     att = _msg(part, "ATT", ["Roll", "Pitch", "Yaw", "DesRoll", "DesPitch", "DesYaw"])
-    imu = _msg(part, "IMU", ["GyrX", "GyrY", "GyrZ"])
+    imu = _msg(part, "IMU", ["GyrX", "GyrY", "GyrZ", "AccX", "AccY", "AccZ"])
     gps = _msg(part, "GPS", ["Spd", "GCrs", "VZ"])
     ctun = _msg(part, "CTUN", ["ThI", "ThO", "BAlt"])
     rcou = _msg(part, "RCOU", ["C1", "C2", "C3", "C4"])
@@ -110,6 +112,24 @@ def read(cfg, f, labels):
     dr, dp, dy = rs(att, "DesRoll"), rs(att, "DesPitch"), _wrap_deg(rs(att, "DesYaw", True))
     x = np.column_stack(vel + [_cq(cfg, euler_to_quat(r, p, y))] + [rs(imu, c) for c in ("GyrX", "GyrY", "GyrZ")]
                         + [_cq(cfg, euler_to_quat(dr, dp, dy)), rs(ctun, "ThI"), rs(ctun, "ThO")])
+    if cfg.get("actuator_outputs"):
+        if rcou is None:
+            return dict(key=f["key"], error="RCOU 없음")
+        tr_, d_ = rcou
+        o = d_.to_numpy(float)
+        ok_ = np.isfinite(o).all(1)
+        act = np.column_stack([resample(tr_[ok_], o[ok_].mean(1), g, dt)[0],
+                               resample(tr_[ok_], o[ok_].max(1) - o[ok_].min(1), g, dt)[0]])
+        x = np.column_stack([x[:, :len(STATE)], act, x[:, len(STATE):]])
+    if cfg.get("std_outputs"):
+        ti, di = imu
+        sds = []
+        for c in ("GyrX", "GyrY", "GyrZ", "AccX", "AccY", "AccZ"):
+            v = di[c].to_numpy(float)
+            ok = np.isfinite(v)
+            sds.append(resample(ti[ok], v[ok], g, dt, with_std=True)[2])
+        n_state = len(STATE) + (len(ACT) if cfg.get("actuator_outputs") else 0)
+        x = np.column_stack([x[:, :n_state], np.column_stack(sds), x[:, n_state:]])
     # 지상 (P9, v2 규칙). RCOU가 없는 시각은 지상 아님으로 둔다
     ground = np.zeros(len(g), bool)
     if rcou is not None:
@@ -119,7 +139,7 @@ def read(cfg, f, labels):
         pwm_g = resample(tr[ok], pwm[ok], g, dt)[0]
         inside = (g >= tr[0]) & (g <= tr[-1])
         gr = cfg["ground"]
-        ground = inside & ((pwm_g <= gr["pwm_max"]) | ((x[:, -1] < gr["idle_throttle_max"]) & (pwm_g < gr["idle_pwm_max"])))
+        ground = inside & ((pwm_g <= gr["pwm_max"]) | ((x[:, -1] < gr["idle_throttle_max"]) & (pwm_g < gr["idle_pwm_max"])))  # x[:, -1] = throttle_out
     # 이륙 전(바닥에서 떠오르기 전)도 지상 (P9 v0.3): 모터는 돌아도 아직 땅 위인 과도 구간이 시퀀스 앞에 붙어
     # 비행별 기준선(처음 10 s)을 오염시켰다. 기존 make_csv 규칙: 기압 고도가 지면(처음 30스텝 중앙값)보다
     # liftoff_alt_m 이상 오르고 모터 PWM > pwm_max인 첫 시각부터. 정상 비행은 마지막으로 그 조건이 성립한 시각까지.
@@ -170,4 +190,5 @@ def load_all(cfg):
     sets["normal"], sets["valid"] = tr, va
     for cls in ("GPS", "IMU", "Motor", "Vibration"):
         sets[cls.lower()] = by_cls.get(cls, [])
-    return sets, excluded, STATE, COMMAND
+    return (sets, excluded, STATE + (ACT if cfg.get("actuator_outputs") else []) + (STD if cfg.get("std_outputs") else []),
+            COMMAND)
